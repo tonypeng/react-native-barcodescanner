@@ -26,6 +26,8 @@ public class BarcodeScannerView extends FrameLayout implements Camera.PreviewCal
 
     private static final String TAG = "BarcodeScannerView";
 
+    private boolean _isScanning;
+
     public BarcodeScannerView(Context context) {
         super(context);
 
@@ -58,6 +60,11 @@ public class BarcodeScannerView extends FrameLayout implements Camera.PreviewCal
 
     @Override
     public void onPreviewFrame(byte[] data, Camera camera) {
+        if (_isScanning) {
+            return;
+        }
+        _isScanning = true;
+
         try {
             Camera.Parameters parameters = camera.getParameters();
             Camera.Size size = parameters.getPreviewSize();
@@ -77,37 +84,25 @@ public class BarcodeScannerView extends FrameLayout implements Camera.PreviewCal
                 data = rotatedData;
             }
 
-            Result rawResult = null;
-            PlanarYUVLuminanceSource source = new PlanarYUVLuminanceSource(data, width, height, 0, 0, width, height, false);
+            new BarcodeScannerAsyncTask(data, width, height, new BarcodeScannerAsyncTask.Callback() {
+                @Override
+                public void onReadCompleted(String type, String data) {
+                    _isScanning = false;
+                    if (type == null && data == null) {
+                        return;
+                    }
 
-            if (source != null) {
-                BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
-                try {
-                    rawResult = mMultiFormatReader.decodeWithState(bitmap);
-                } catch (ReaderException re) {
-                    // continue
-                } catch (NullPointerException npe) {
-                    // This is terrible
-                } catch (ArrayIndexOutOfBoundsException aoe) {
-
-                } finally {
-                    mMultiFormatReader.reset();
+                    Log.i(TAG, type + ": " + data);
+                    WritableMap event = Arguments.createMap();
+                    event.putString("type", type);
+                    event.putString("data", data);
+                    ReactContext reactContext = (ReactContext)getContext();
+                    reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
+                            getId(),
+                            "topChange",
+                            event);
                 }
-            }
-
-            final Result finalRawResult = rawResult;
-
-            if (finalRawResult != null) {
-                Log.i(TAG, finalRawResult.getText());
-                WritableMap event = Arguments.createMap();
-                event.putString("data", finalRawResult.getText());
-                event.putString("type", finalRawResult.getBarcodeFormat().toString());
-                ReactContext reactContext = (ReactContext)getContext();
-                reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
-                        getId(),
-                        "topChange",
-                        event);
-            }
+            }).execute();
         } catch(Exception e) {
             // TODO: Terrible hack. It is possible that this method is invoked after camera is released.
             Log.e(TAG, e.toString(), e);

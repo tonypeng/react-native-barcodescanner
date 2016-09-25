@@ -37,6 +37,7 @@ class BarcodeScannerView extends Component {
         color={this.props.viewFinderBorderColor}
         borderWidth={this.props.viewFinderBorderWidth}
         borderLength={this.props.viewFinderBorderLength}
+        borderRadius={this.props.viewFinderBorderRadius}
         height={this.props.viewFinderHeight}
         isLoading={this.props.viewFinderShowLoadingIndicator}
         width={this.props.viewFinderWidth}
